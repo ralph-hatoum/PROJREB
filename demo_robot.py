@@ -18,12 +18,15 @@ from tf.transformations import euler_from_quaternion
 from math import pi
 import threading
 
+## Variables quelconques utilisées dans le code ##
+
 flag = -1
 counter = 0
 lamold = 0
 lamnew = 0
 frames = 0
 lock = threading.Lock()
+
 ## FONCTIONS DE TRAITEMENT D'IMAGE ##
 
 def putCube(frame):
@@ -123,10 +126,6 @@ def putCubeOnContour(cnt, frame):
         return(frame, 0, (0,0))
 
 def computeCubeCenter(upperLayerCubePoints):
-    # print(upperLayerCubePoints[0][0])
-    # print(upperLayerCubePoints[1][0])
-    # print(upperLayerCubePoints[2][0])
-    # print(upperLayerCubePoints[3][0])
 
     mid = [0,0,1.0]
 
@@ -135,22 +134,10 @@ def computeCubeCenter(upperLayerCubePoints):
 
     mid = np.float32(mid)
 
-    # print(f"mid : {mid}")
-
     return mid
 
 def drawMid(img, pts1, xc):
-    # xc =xc[:,0:xc.shape[1]-1]
-    # Drawing bottom plane of the cube 
-    # cv2.drawContours(img, [pts1.astype(np.int32)] , -1, (0,255,0), 30)
-    # Drawing lines between the bottom and the top plane
-    # for i in range(0,4):
-    #     img = cv2.line(img, tuple(pts1[i].astype(np.int32)), tuple(xc[i].astype(np.int32)),(255),30)
-    # Drawing upper plane
-    # img = cv2.drawContours(img,[xc.astype(np.int32)],-1,(0,0,255),30)
-    # print([xc[:-1].astype(np.int32)])
     cv2.circle(img, tuple(xc[:-1].astype(np.int32)), 10, (0, 0, 255), 5)
-    # print(img)
     return img
 
 def projectionMatrix(b,w,h): 
@@ -331,24 +318,28 @@ def findChildren(k, hierarchy,childs):
 
 def detectWhichSectorBoxIsIn(mids, limit1, limit2, tts):
     # Detection de la boite 
+    # Actuellement, les flags BOX_ENCOUNTERED et flagPushMode sont redondents.
+    # Le flag BOX_ENCOUNTERED a vocation à disparaitre, pour permettre la détection d'autres boites sur le chemin
+
     global flagPushMode
     global VITESSE_COURANTE
     global BOX_ENCOUNTERED
     if not(BOX_ENCOUNTERED):
         if not(flagPushMode):
             if len(mids)==0:
+                # Pas de boite detectee
                 print("No box detected")
             else :
-                print(mids)
-                mids = list(map(lambda x : x[1], mids))
-                mids.sort()
+                # On récupère la liste des tags AR detectes dans l'image par mids, on obtient une liste de 2-uplets
+                mids = list(map(lambda x : x[1], mids)) # On traite uniquement la coordonnées y donc on récupère seulement les 2e éléments des 2-uples
+                mids.sort() # On les trie, de cette façon on sait que le dernier élement de la liste est le plus proche du robot
                 y_to_check = mids[-1]
-                print(y_to_check)
-                print(limit1, limit2)
                 if y_to_check<limit1:
+                    # Box detectee en safe zone
                     print("Box detected in safe zone - not changing behavior")
                     
                 elif y_to_check>=limit1 and y_to_check<=limit2:
+                    # Box detectee en zone intermediaire
                     print("Box detected closeby - lowering speed")
                     # MODIFICATION DE LA VITESSE COURANTE 
                     lock.acquire()
@@ -356,8 +347,9 @@ def detectWhichSectorBoxIsIn(mids, limit1, limit2, tts):
                     lock.release()
                     print("speed will be : ", VITESSE_COURANTE)
                 elif y_to_check>limit2 : 
+                    # Passage en pushmode
                     print("Almost at box - push mode")
-                    tts.say("Boite, je la pousse")
+                    tts.say("Boite, je la pousse") # Signal vocal 
                     flagPushMode = True
                     BOX_ENCOUNTERED = True
         else: 
@@ -365,6 +357,7 @@ def detectWhichSectorBoxIsIn(mids, limit1, limit2, tts):
 
 def updateSpeed(y_value, initialSpeed, goal,limit1,limit2):
     # Need to update speed according to y_value
+    # changement de la vitesse pour la zone intermediaire
     a = (initialSpeed-goal)/(limit1-limit2)
     b = initialSpeed - limit1*((initialSpeed-goal)/(limit1-limit2))
     # print(a,b)
@@ -374,13 +367,11 @@ def updateSpeed(y_value, initialSpeed, goal,limit1,limit2):
 ## FIN DETECTION BOITE ET AJUSTEMENT VITESSE ##
 
 
-tts = ALProxy("ALTextToSpeech", "127.0.0.1", 9559)
+tts = ALProxy("ALTextToSpeech", "127.0.0.1", 9559) # pour se connecter a l'interface Text2Speech de Pepper
 
-topic_camera_up = "/pepper_robot/camera/front/image_raw"
+topic_camera_up = "/pepper_robot/camera/front/image_raw" # Topic de la camera frontale du robot
 # topic_head = "/pepper_robot/pose/joint_angles" 
-joint_message_type = "naoqi_bridge_msgs/JointAnglesWithSpeed"
-
-# received_message = False
+# joint_message_type = "naoqi_bridge_msgs/JointAnglesWithSpeed"
 
 
 # FLAG + VITESSES NORMALES ET VITESSE EN PUSHMODE
